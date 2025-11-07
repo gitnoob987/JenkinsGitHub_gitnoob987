@@ -1,18 +1,65 @@
 variable "gcp_project" {}
 
-provider "google" {
-  project = var.gcp_project 
-  region  = "us-west1"
-}
-
 terraform {
+  required_providers {
+    google = {
+        source = "hashicorp/google"
+        version = "7.7.0"
+    }
+  }
   backend "gcs" {
-    bucket  = "tf-remote-state-student_01_16a69684793d-28692-13442"
-    prefix  = "terraform/state/lab01" 
+    bucket = "tf-remote-state-student_01_d37aed5acaf8-1081-26869"
+    prefix = "terraform/state/lab00"
   }
 }
 
-resource "google_compute_network" "example_vpc1" {
-  name                    = "example-vpc1"
-  auto_create_subnetworks = true 
+provider "google" {
+    project = var.gcp_project
+    region  = "europe-west1"
+}
+
+resource "google_compute_instance" "jenkins" {
+  name         = "jenkins"
+  machine_type = "e2-medium"
+  zone         = "europe-west1-b"
+
+  allow_stopping_for_update = true
+  
+  labels = {
+    role = "jenkins_server"
+  }
+  
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-12"
+    }
+  }
+
+  metadata = {
+    ssh-keys = "ansible:${file("ansible_key.pub")}"
+  }
+  
+  network_interface {
+    network = "default"
+
+    access_config {
+      network_tier = "STANDARD"
+    }
+  }
+}
+
+resource "google_compute_firewall" "jenkins-firewall" {
+  name    = "jenkins-firewall"
+  network = "default"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22", "8080"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
+output "jenkins_ip" {
+  value = google_compute_instance.jenkins.network_interface[0].access_config[0].nat_ip
 }
